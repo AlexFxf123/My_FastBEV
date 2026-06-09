@@ -120,7 +120,10 @@ class RadarBEVEncoder(nn.Module):
         ).long()
 
         # 过滤超出范围的点
-        mask = (coords >= 0).all(dim=1) & (coords < torch.tensor(self.grid_size[:3], device=device)).all(dim=1)
+        gx, gy, gz = self.grid_size[:3]
+        mask = (coords[:, 0] >= 0) & (coords[:, 0] < gx) & \
+               (coords[:, 1] >= 0) & (coords[:, 1] < gy) & \
+               (coords[:, 2] >= 0) & (coords[:, 2] < gz)
         coords = coords[mask]
         points = points[mask]
 

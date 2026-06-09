@@ -182,13 +182,13 @@ train_pipeline = [
          with_bbox=True,
          with_label=True,
          with_bev_seg=True),
-    # 加载雷达点云 (使用真实的雷达数据)
+    # 加载雷达点云（从info的radars字段读取所有雷达并合并）
+    # LoadRadarPointsFromFile 会自动将points写入'points'字段（BasePoints对象），
+    # 后续RandomFlip3D/GlobalRotScaleTrans/DefaultFormatBundle3D会自动处理
     dict(
-        type='LoadPointsFromFile',
-        dummy=False,
-        coord_type='LIDAR',
-        load_dim=5,   # x, y, z, rcs, doppler
-        use_dim=5),   # 使用全部5维
+        type='LoadRadarPointsFromFile',
+        use_dim=[0, 1, 2, 3, 5, 6, 7],  # x,y,z,dyn_prop,rcs,vx,vy
+        max_points=30000),
     dict(
         type='RandomFlip3D',
         flip_2d=False,
@@ -207,7 +207,7 @@ train_pipeline = [
     dict(type='KittiSetOrigin', point_cloud_range=point_cloud_range),
     dict(type='NormalizeMultiviewImage', **img_norm_cfg),
     dict(type='DefaultFormatBundle3D', class_names=class_names),
-    dict(type='Collect3D', keys=['img', 'points', 'gt_bboxes', 'gt_labels',
+    dict(type='Collect3D', keys=['img', 'radar_points', 'gt_bboxes', 'gt_labels',
                                  'gt_bboxes_3d', 'gt_labels_3d',
                                  'gt_bev_seg'])]
 
@@ -218,16 +218,14 @@ test_pipeline = [
             file_client_args=file_client_args)]),
     # 测试时也加载雷达点云
     dict(
-        type='LoadPointsFromFile',
-        dummy=False,
-        coord_type='LIDAR',
-        load_dim=5,
-        use_dim=5),
+        type='LoadRadarPointsFromFile',
+        use_dim=[0, 1, 2, 3, 5, 6, 7],
+        max_points=30000),
     dict(type='RandomAugImageMultiViewImage', data_config=data_config, is_train=False),
     dict(type='KittiSetOrigin', point_cloud_range=point_cloud_range),
     dict(type='NormalizeMultiviewImage', **img_norm_cfg),
     dict(type='DefaultFormatBundle3D', class_names=class_names, with_label=False),
-    dict(type='Collect3D', keys=['img', 'points'])]
+    dict(type='Collect3D', keys=['img', 'radar_points'])]
 
 data = dict(
     samples_per_gpu=1,
@@ -243,7 +241,7 @@ data = dict(
             test_mode=False,
             with_box2d=True,
             box_type_3d='LiDAR',
-            ann_file='/home/radardepth/data/nuscenes/nuscenes_infos_train_4d_interval3_max60.pkl',
+            ann_file='/home/radardepth/data/nuscenes/nuscenes_infos_train_4d_interval3_max60_wradar.pkl',
             load_interval=1,
             sequential=True,
             n_times=4,
@@ -267,7 +265,7 @@ data = dict(
         test_mode=True,
         with_box2d=True,
         box_type_3d='LiDAR',
-        ann_file='/home/radardepth/data/nuscenes/nuscenes_infos_val_4d_interval3_max60.pkl',
+        ann_file='/home/radardepth/data/nuscenes/nuscenes_infos_val_4d_interval3_max60_wradar.pkl',
         load_interval=1,
         sequential=True,
         n_times=4,
@@ -289,7 +287,7 @@ data = dict(
         test_mode=True,
         with_box2d=True,
         box_type_3d='LiDAR',
-        ann_file='/home/radardepth/data/nuscenes/nuscenes_infos_val_4d_interval3_max60.pkl',
+        ann_file='/home/radardepth/data/nuscenes/nuscenes_infos_val_4d_interval3_max60_wradar.pkl',
         load_interval=1,
         sequential=True,
         n_times=4,
@@ -339,6 +337,8 @@ log_level = 'INFO'
 # 加载预训练的FastBEV权重作为初始化
 # 融合模型从纯视觉的FastBEV权重开始，再finetune
 load_from = 'work_dir/latest.pth'
+# 后续将从融合模型导入参数开始训练
+# load_from = 'work_dir_fusion/latest.pth'
 resume_from = None
 workflow = [('train', 1)]
 

@@ -1,6 +1,7 @@
 # 模型训练
 python tools/train.py configs/fastbev/exp/paper/fastbev_m0_r18_s256x704_v200x200x4_c192_d2_f4.py --work-dir work_dir --gpu-ids 0
 
+python tools/train.py configs/fastbev/exp/fusion/fastbev_m0_r18_radar_fusion.py --work-dir work_dir_fusion
 # 基础评估，输出mAP、NDS等指标
 python tools/test.py \
     configs/fastbev/exp/paper/fastbev_m0_r18_s256x704_v200x200x4_c192_d2_f4.py \

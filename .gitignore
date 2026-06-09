@@ -157,4 +157,5 @@ tools/quant
 
 
 work_dir/
+work_dir_fusion/
 onnx_models/

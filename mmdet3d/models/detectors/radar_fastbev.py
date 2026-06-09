@@ -176,15 +176,17 @@ class RadarFastBEV(FastBEV):
             else:
                 pts = radar_points[b]
 
-            # 体素化处理
-            voxel_feat = self._points_to_voxel_feat(pts)
+            # 简化的体素化: 投影到BEV网格
+            voxel_feat = self._points_to_voxel_feat(pts)  # (1, 2, H, W)
             radar_bev.append(voxel_feat)
 
-        radar_bev = torch.stack(radar_bev, dim=0)
+        radar_bev = torch.cat(radar_bev, dim=0)  # (B, 2, H, W)
 
-        # 通过雷达编码器
-        if self.radar_encoder is not None:
-            radar_bev = self.radar_encoder(radar_bev)
+        # 如果需要更多通道，用1x1卷积升维
+        if radar_bev.shape[1] < 64:
+            if not hasattr(self, 'radar_to_channels'):
+                self.radar_to_channels = nn.Conv2d(radar_bev.shape[1], 64, 1).to(radar_bev.device)
+            radar_bev = self.radar_to_channels(radar_bev)
 
         # resize到视觉BEV网格尺寸
         n_voxels = self.n_voxels[0]
@@ -239,8 +241,10 @@ class RadarFastBEV(FastBEV):
             x = coords[k, 0]
             y = coords[k, 1]
             if 0 <= x < grid_x and 0 <= y < grid_y:
-                bev_feat[0, y, x] = max(bev_feat[0, y, x], rcs[k])
-                bev_feat[1, y, x] = max(bev_feat[1, y, x], abs(doppler[k]))
+                if rcs[k] > bev_feat[0, y, x]:
+                    bev_feat[0, y, x] = rcs[k]
+                if abs(doppler[k]) > bev_feat[1, y, x]:
+                    bev_feat[1, y, x] = abs(doppler[k])
 
         return bev_feat.unsqueeze(0)  # (1, 2, H, W)
 
