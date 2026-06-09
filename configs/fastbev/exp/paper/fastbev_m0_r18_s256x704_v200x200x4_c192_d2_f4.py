@@ -313,7 +313,10 @@ dist_params = dict(backend='nccl')
 find_unused_parameters = True  # todo: fix number of FPN outputs
 log_level = 'INFO'
 
-load_from = 'pretrained_models/cascade_mask_rcnn_r18_fpn_coco-mstrain_3x_20e_nuim_bbox_mAP_0.5110_segm_mAP_0.4070.pth'
+# 第一次从预训练模型开始
+# load_from = 'pretrained_models/cascade_mask_rcnn_r18_fpn_coco-mstrain_3x_20e_nuim_bbox_mAP_0.5110_segm_mAP_0.4070.pth'
+# 后续从之前训练好模型开始
+load_from = 'work_dir/epoch_5.pth'
 resume_from = None
 workflow = [('train', 1)]
 
