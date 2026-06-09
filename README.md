@@ -105,7 +105,8 @@ TODO
   year={2023}
 }
 ```
-
+# 模型训练
+python tools/train.py configs/fastbev/exp/paper/fastbev_m0_r18_s256x704_v200x200x4_c192_d2_f4.py --work-dir work_dir --gpu-ids 0
 
 # 参考博文
 https://blog.csdn.net/weixin_41691854/article/details/154491942?spm=1001.2014.3001.5502
