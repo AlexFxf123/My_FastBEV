@@ -12,14 +12,16 @@ def add_adj_info():
     max_adj = 60
     sample_num = None
     for set in ['test', 'val', 'train', ]:
-        if set in ['val', 'train']:
+        # if set in ['val', 'train']:
+        if set in ['test']:
             continue
-        dataset = pickle.load(open('./data/nuscenes/nuscenes_infos_%s.pkl' % set, 'rb'))
+        dataset = pickle.load(open('/home/radardepth/data/nuscenes/nuscenes_infos_%s.pkl' % set, 'rb'))
         if set in ['train', 'val']:
-            nuscenes_version = 'v1.0-trainval'
+            # nuscenes_version = 'v1.0-trainval'
+            nuscenes_version = 'v1.0-mini'
         else:
             nuscenes_version = 'v1.0-test'
-        dataroot = './data/nuscenes/'
+        dataroot = '/home/radardepth/data/nuscenes/'
         nuscenes = NuScenes(nuscenes_version, dataroot)
         map_token_to_id = dict()
         for id in range(len(dataset['infos'])):
@@ -48,7 +50,7 @@ def add_adj_info():
                             break
                         sd_adj = nuscenes.get('sample_data', sample_data[adj])
                         sample_data = sd_adj
-                        adj_list[cam].append(dict(data_path='./data/nuscenes/' + sd_adj['filename'],
+                        adj_list[cam].append(dict(data_path='/home/radardepth/data/nuscenes/' + sd_adj['filename'],
                                                   timestamp=sd_adj['timestamp'],
                                                   ego_pose_token=sd_adj['ego_pose_token']))
                         count += 1
@@ -103,7 +105,7 @@ def add_adj_info():
             if set in ['train', 'val']:
                 dataset['infos'][id]['gt_velocity'] = dataset['infos'][id]['gt_velocity'] - velocity_lidar.reshape(1, 2)
 
-        filename = './data/nuscenes/nuscenes_infos_%s_4d_interval%d_max%d.pkl' % (set, interval, max_adj)
+        filename = '/home/radardepth/data/nuscenes/nuscenes_infos_%s_4d_interval%d_max%d.pkl' % (set, interval, max_adj)
         if sample_num is not None:
             filename = filename.replace('.pkl', f'_sample{sample_num}.pkl')
         with open(filename, 'wb') as fid:

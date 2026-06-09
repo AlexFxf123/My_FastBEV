@@ -10,7 +10,7 @@ model = dict(
 file_client_args = dict(
     backend='petrel',
     path_mapping=dict({
-        './data/nuscenes/': 's3://nuscenes/nuscenes/',
+        '/home/radardepth/data/nuscenes/': 's3://nuscenes/nuscenes/',
         'data/nuscenes/': 's3://nuscenes/nuscenes/'
     }))
 img_norm_cfg = dict(
