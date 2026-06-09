@@ -300,10 +300,12 @@ lr_config = dict(
 # total_epochs = 20
 total_epochs = 5    # 修改为5次，仅用作测试
 checkpoint_config = dict(interval=1)
+# 在配置文件中
 log_config = dict(
     interval=10,
     hooks=[
-        dict(type='TextLoggerHook'),
+        dict(type='TextLoggerHook'),            # 保留文件日志
+        dict(type='ProgressBarLoggerHook'),     # 新增进度条
         dict(type='TensorboardLoggerHook'),
     ])
 evaluation = dict(interval=5)
