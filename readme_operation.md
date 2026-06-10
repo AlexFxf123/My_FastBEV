@@ -1,3 +1,8 @@
+# 数据生成
+python tools/create_data.py nuscenes --root-path /home/radardepth/data/nuscenes --out-dir /home/radardepth/data/nuscenes --extra-tag nuscenes --workers 10 --version v1.0-trainval
+
+python tools/data_converter/nuscenes_seq_converter.py
+
 # 模型训练
 python tools/train.py configs/fastbev/exp/paper/fastbev_m0_r18_s256x704_v200x200x4_c192_d2_f4.py --work-dir work_dir --gpu-ids 0
 
