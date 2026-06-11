@@ -11,7 +11,8 @@ python tools/train.py configs/fastbev/exp/fusion/fastbev_m0_r18_radar_fusion.py 
 python tools/test.py \
     configs/fastbev/exp/paper/fastbev_m0_r18_s256x704_v200x200x4_c192_d2_f4.py \
     work_dir/latest.pth \
-    --eval mAP
+    --eval mAP \
+    --save-dir work_dir_m0_results/
 
 # 保存结果pkl + 可视化BEV和图像
 python tools/test.py \

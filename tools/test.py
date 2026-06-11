@@ -1,5 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import argparse
+import copy
 import mmcv
 import os
 import torch
@@ -27,8 +28,7 @@ import ipdb
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description='MMDet test (and eval) a model')
+    parser = argparse.ArgumentParser(description='MMDet test (and eval) a model')
     parser.add_argument('config', help='test config file path')
     parser.add_argument('checkpoint', help='checkpoint file')
     parser.add_argument('--out', help='output result file in pickle format')
@@ -104,9 +104,22 @@ def parse_args():
         action='store_true',
         help='whether debug')
     parser.add_argument('--debug_num', type=int, default=50)
-    
     parser.add_argument('--extrinsic-noise', '-n', type=float, default=0)
-    
+
+    # =================================================================
+    # ★ INSERT-1 START：注册 --save-dir（必须放 return args 之前）
+    # =================================================================
+    parser.add_argument(
+        '--save-dir',
+        type=str,
+        default=None,
+        help='REQUIRED in practice: root folder for ALL outputs '
+             '(pkl / format submission / eval tmp). '
+             'If not set, falls back to cfg.work_dir or ./output_eval.')
+    # =================================================================
+    # ★ INSERT-1 END
+    # =================================================================
+
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
@@ -118,6 +131,39 @@ def parse_args():
     if args.options:
         warnings.warn('--options is deprecated in favor of --eval-options')
         args.eval_options = args.options
+
+    # =================================================================
+    # ★ 路径规范化（放 return 之前/之后都行；这里放 return 前最清晰）
+    # =================================================================
+    # ① 锁 save_dir
+    if args.save_dir is not None:
+        args.save_dir = osp.abspath(args.save_dir)
+        os.makedirs(args.save_dir, exist_ok=True)
+    else:
+        # fallback：先试着从 cfg.work_dir，再兜底
+        _wd = getattr(args, '_work_dir_cache', None)
+        if not _wd and 'cfg' in dir():
+            pass  # 下面 main() 里再拿 cfg.work_dir
+        if _wd is None:
+            _wd = './output_eval'
+        args.save_dir = osp.abspath(_wd)
+        os.makedirs(args.save_dir, exist_ok=True)
+
+    # ② --out：如果没给，自动落 save_dir；如果给了，保证父目录存在
+    if args.out is not None:
+        args.out = osp.abspath(args.out)
+        os.makedirs(osp.dirname(args.out), exist_ok=True)
+    else:
+        args.out = osp.join(args.save_dir, 'results.pkl')
+        # 先别 mkdir 这里也行，rank==0 再建；但为了安全：
+        os.makedirs(args.save_dir, exist_ok=True)
+
+    # ③ --tmpdir：拽出 /tmp，防 OOM-killer
+    if args.tmpdir is None:
+        args.tmpdir = osp.join(args.save_dir, 'eval_tmp')
+    args.tmpdir = osp.abspath(args.tmpdir)
+    os.makedirs(args.tmpdir, exist_ok=True)
+
     return args
 
 
@@ -221,16 +267,44 @@ def main():
         # segmentation dataset has `PALETTE` attribute
         model.PALETTE = dataset.PALETTE
 
+    # =================================================================
+    # ★ INSERT-2 START：把 eval tmp 拽出 /tmp + 保证 save_dir 一定存在
+    # （在 distributed 判断之后，推理之前/之后都行；这里放推理前最稳）
+    # =================================================================
+    # 如果 save-dir 仍没初始化（例如 fallback 走 cfg.work_dir 的情况）：
+    if not hasattr(args, 'save_dir') or args.save_dir is None:
+        _wd = cfg.work_dir if hasattr(cfg, 'work_dir') and cfg.work_dir else './output_eval'
+        args.save_dir = osp.abspath(_wd)
+        os.makedirs(args.save_dir, exist_ok=True)
+
+    # 把 show-dir 也收进 save-dir
+    if args.show_dir is None:
+        args.show_dir = osp.join(args.save_dir, 'vis')
+    args.show_dir = osp.abspath(args.show_dir)
+    os.makedirs(args.show_dir, exist_ok=True)
+
+    # tmpdir 二次保险（防 format_results / nusc_eval 暗开 /tmp）
+    if not hasattr(args, 'tmpdir') or args.tmpdir is None:
+        args.tmpdir = osp.join(args.save_dir, 'eval_tmp')
+    args.tmpdir = osp.abspath(args.tmpdir)
+    os.makedirs(args.tmpdir, exist_ok=True)
+    # =================================================================
+    # ★ INSERT-2 END
+    # =================================================================
+
     if not distributed:
         model = MMDataParallel(model, device_ids=[0])
-        outputs = single_gpu_test(model, data_loader, args.show, args.show_dir, debug=args.debug)
+        # 你原始 single_gpu_test 原型是 4 个实参：(model, data_loader, show, show_dir)
+        outputs = single_gpu_test(model, data_loader, args.show, args.show_dir,
+                                  debug=args.debug)
     else:
         model = MMDistributedDataParallel(
             model.cuda(),
             device_ids=[torch.cuda.current_device()],
             broadcast_buffers=False)
         outputs = multi_gpu_test(model, data_loader, args.tmpdir,
-                                 args.gpu_collect, debug=args.debug, debug_num=args.debug_num)
+                                 args.gpu_collect, debug=args.debug,
+                                 debug_num=args.debug_num)
 
     rank, _ = get_dist_info()
     if rank == 0:
@@ -238,18 +312,29 @@ def main():
         if args.out:
             print(f'\nwriting results to {args.out}')
             mmcv.dump(outputs, args.out)
+
         kwargs = {} if args.eval_options is None else args.eval_options
+
         if args.format_only:
+            # ★ 强制 format 输出进 save-dir（不管 dataset.format_results 内部怎么拼）
+            fmt_root = osp.join(args.save_dir, 'format_submission', 'results')
+            _fmt_dir = osp.dirname(fmt_root)
+            os.makedirs(_fmt_dir, exist_ok=True)
+
+            # 覆盖 nuScenes format 实现认的名字
+            kwargs['jsonfile_prefix'] = fmt_root
+            kwargs['out_dir']        = _fmt_dir
+            kwargs['submission_dir'] = _fmt_dir
+
+            print(f'[SAVE-DIR] format_results → {_fmt_dir}')
             dataset.format_results(outputs, **kwargs)
+
         if args.eval:
             eval_kwargs = cfg.get('evaluation', {}).copy()
-            # hard-code way to remove EvalHook args
-            for key in [
-                    'interval', 'tmpdir', 'start', 'gpu_collect', 'save_best',
-                    'rule'
-            ]:
+            for key in ['interval','tmpdir','start','gpu_collect','save_best','rule']:
                 eval_kwargs.pop(key, None)
             eval_kwargs.update(dict(metric=args.eval, **kwargs))
+            print(f'[SAVE-DIR] eval tmp = {args.tmpdir}')
             print(dataset.evaluate(outputs, vis_mode=args.vis, **eval_kwargs))
 
 
