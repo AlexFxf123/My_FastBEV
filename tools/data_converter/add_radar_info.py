@@ -39,7 +39,7 @@ def add_radar_info():
         print(f'加载了 {len(dataset["infos"])} 个样本')
         
         # 初始化nuscenes (使用mini版，因为只安装了mini)
-        nusc = NuScenes(version='v1.0-mini', dataroot=dataroot, verbose=True)
+        nusc = NuScenes(version='v1.0-trainval', dataroot=dataroot, verbose=True)
         
         radar_cameras = [
             'RADAR_FRONT',
