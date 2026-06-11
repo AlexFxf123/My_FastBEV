@@ -1,12 +1,8 @@
-# -*- coding: utf-8 -*-
-"""
-FastBEV + 毫米波雷达融合模型配置
+# RadarFastBEV: FastBEV + 毫米波雷达 BEV-cell gated fusion
+# 约束：雷达 BEV 与 视觉 BEV 同 bound / 同 200x200 / dx=dy=0.5
+#       融合在 2D BEV 上做 gated concat，再无损包回 neck_3d 的 5D 输入约定
+# 模型代码在 mmdet3d/models/detectors/radar_fastbev.py 中定义
 
-基于 fastbev_m0_r18_s256x704_v200x200x4_c192_d2_f4.py 修改
-增加雷达点云分支：雷达点云→体素化→稀疏卷积→BEV特征→与视觉BEV融合
-"""
-
-# 模型配置
 model = dict(
     type='RadarFastBEV',
     style="v1",
@@ -54,8 +50,8 @@ model = dict(
             type='AlignedAnchor3DRangeGenerator',
             ranges=[[-50, -50, -1.8, 50, 50, -1.8]],
             sizes=[
-                [0.8660, 2.5981, 1.],  # 1.5/sqrt(3)
-                [0.5774, 1.7321, 1.],  # 1/sqrt(3)
+                [0.8660, 2.5981, 1.],
+                [0.5774, 1.7321, 1.],
                 [1., 1., 1.],
                 [0.4, 0.4, 1],
             ],
@@ -64,7 +60,7 @@ model = dict(
             reshape_out=True),
         assigner_per_size=False,
         diff_rad_by_sin=True,
-        dir_offset=0.7854,  # pi/4
+        dir_offset=0.7854,
         dir_limit_offset=0,
         bbox_coder=dict(type='DeltaXYZWLHRBBoxCoder', code_size=9),
         loss_cls=dict(
@@ -76,30 +72,9 @@ model = dict(
         loss_bbox=dict(type='SmoothL1Loss', beta=1.0 / 9.0, loss_weight=0.8),
         loss_dir=dict(
             type='CrossEntropyLoss', use_sigmoid=False, loss_weight=0.8)),
-    # 雷达分支配置
-    radar_encoder=dict(
-        type='RadarBEVEncoder',
-        in_channels=5,  # x, y, z, rcs, doppler
-        feat_channels=[32, 64, 128],
-        grid_size=[400, 400, 1],  # 根据voxel_size计算(range/grid)
-        voxel_size=[0.25, 0.25, 0.4],
-        point_cloud_range=[-50, -50, -3, 50, 50, 3],
-        max_voxels=60000,
-        max_points_per_voxel=10,
-    ),
-    radar_voxel_size=[0.25, 0.25, 0.4],
-    radar_point_cloud_range=[-50, -50, -3, 50, 50, 3],
-    radar_max_voxels=60000,
-    radar_max_points_per_voxel=10,
-    radar_feat_channels=64,
-    radar_feat_height=1,
-    # 融合参数
-    fusion_channels=128,
-    fusion_conv_layers=2,
     multi_scale_id=[0],
     n_voxels=[[200, 200, 4]],
     voxel_size=[[0.5, 0.5, 1.5]],
-    # model training and testing settings
     train_cfg=dict(
         assigner=dict(
             type='MaxIoUAssigner',
@@ -128,12 +103,20 @@ model = dict(
         nms_thr_list=[0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.5, 0.5, 0.2],
         nms_radius_thr_list=[4, 12, 10, 10, 12, 0.85, 0.85, 0.175, 0.175, 1],
         nms_rescale_factor=[1.0, 0.7, 0.55, 0.4, 0.7, 1.0, 1.0, 4.5, 9.0, 1.0],
-    )
+    ),
+    # 雷达融合参数
+    radar_encoder=None,
+    radar_voxel_size=[0.25, 0.25, 0.4],
+    radar_point_cloud_range=[-50, -50, -3, 50, 50, 3],
+    radar_max_voxels=60000,
+    radar_max_points_per_voxel=10,
+    radar_feat_channels=64,
+    radar_feat_height=1,
+    fusion_channels=128,
+    fusion_conv_layers=2,
 )
 
-# 数据范围
 point_cloud_range = [-50, -50, -5, 50, 50, 3]
-# nuScenes 10类
 class_names = [
     'car', 'truck', 'trailer', 'bus', 'construction_vehicle', 'bicycle',
     'motorcycle', 'pedestrian', 'traffic_cone', 'barrier'
@@ -142,7 +125,6 @@ class_names = [
 dataset_type = 'NuScenesMultiView_Map_Dataset2'
 data_root = '/home/radardepth/data/nuscenes/'
 
-# 输入模态 (开启雷达)
 input_modality = dict(
     use_lidar=False,
     use_camera=True,
@@ -154,17 +136,14 @@ img_norm_cfg = dict(mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375],
 data_config = {
     'src_size': (900, 1600),
     'input_size': (256, 704),
-    # train-aug
     'resize': (-0.06, 0.11),
     'crop': (-0.05, 0.05),
     'rot': (-5.4, 5.4),
     'flip': True,
-    # test-aug
     'test_input_size': (256, 704),
     'test_resize': 0.0,
     'test_rotate': 0.0,
     'test_flip': False,
-    # top, right, bottom, left
     'pad': (0, 0, 0, 0),
     'pad_divisor': 32,
     'pad_color': (0, 0, 0),
@@ -172,55 +151,27 @@ data_config = {
 
 file_client_args = dict(backend='disk')
 
-# 训练pipeline (增加雷达点云加载)
 train_pipeline = [
     dict(type='MultiViewPipeline', sequential=True, n_images=6, n_times=4, transforms=[
-        dict(
-            type='LoadImageFromFile',
-            file_client_args=file_client_args)]),
-    dict(type='LoadAnnotations3D',
-         with_bbox=True,
-         with_label=True,
-         with_bev_seg=True),
-    # 加载雷达点云（从info的radars字段读取所有雷达并合并）
-    # LoadRadarPointsFromFile 会自动将points写入'points'字段（BasePoints对象），
-    # 后续RandomFlip3D/GlobalRotScaleTrans/DefaultFormatBundle3D会自动处理
-    dict(
-        type='LoadRadarPointsFromFile',
-        use_dim=[0, 1, 2, 3, 5, 6, 7],  # x,y,z,dyn_prop,rcs,vx,vy
-        max_points=30000),
-    dict(
-        type='RandomFlip3D',
-        flip_2d=False,
-        sync_2d=False,
-        flip_ratio_bev_horizontal=0.5,
-        flip_ratio_bev_vertical=0.5,
-        update_img2lidar=True),
-    dict(
-        type='GlobalRotScaleTrans',
-        rot_range=[-0.3925, 0.3925],
-        scale_ratio_range=[0.95, 1.05],
-        translation_std=[0.05, 0.05, 0.05],
-        update_img2lidar=True),
+        dict(type='LoadImageFromFile', file_client_args=file_client_args)]),
+    dict(type='LoadAnnotations3D', with_bbox=True, with_label=True, with_bev_seg=True),
+    dict(type='LoadRadarPointsFromFile', use_dim=[0, 1, 2, 3, 5, 6, 7], max_points=30000),
+    dict(type='RandomFlip3D', flip_2d=False, sync_2d=False,
+         flip_ratio_bev_horizontal=0.5, flip_ratio_bev_vertical=0.5, update_img2lidar=True),
+    dict(type='GlobalRotScaleTrans', rot_range=[-0.3925, 0.3925],
+         scale_ratio_range=[0.95, 1.05], translation_std=[0.05, 0.05, 0.05], update_img2lidar=True),
     dict(type='RandomAugImageMultiViewImage', data_config=data_config),
     dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
     dict(type='KittiSetOrigin', point_cloud_range=point_cloud_range),
     dict(type='NormalizeMultiviewImage', **img_norm_cfg),
     dict(type='DefaultFormatBundle3D', class_names=class_names),
     dict(type='Collect3D', keys=['img', 'radar_points', 'gt_bboxes', 'gt_labels',
-                                 'gt_bboxes_3d', 'gt_labels_3d',
-                                 'gt_bev_seg'])]
+                                 'gt_bboxes_3d', 'gt_labels_3d', 'gt_bev_seg'])]
 
 test_pipeline = [
     dict(type='MultiViewPipeline', sequential=True, n_images=6, n_times=4, transforms=[
-        dict(
-            type='LoadImageFromFile',
-            file_client_args=file_client_args)]),
-    # 测试时也加载雷达点云
-    dict(
-        type='LoadRadarPointsFromFile',
-        use_dim=[0, 1, 2, 3, 5, 6, 7],
-        max_points=30000),
+        dict(type='LoadImageFromFile', file_client_args=file_client_args)]),
+    dict(type='LoadRadarPointsFromFile', use_dim=[0, 1, 2, 3, 5, 6, 7], max_points=30000),
     dict(type='RandomAugImageMultiViewImage', data_config=data_config, is_train=False),
     dict(type='KittiSetOrigin', point_cloud_range=point_cloud_range),
     dict(type='NormalizeMultiviewImage', **img_norm_cfg),
@@ -233,114 +184,59 @@ data = dict(
     train=dict(
         type='CBGSDataset',
         dataset=dict(
-            type=dataset_type,
-            data_root=data_root,
-            pipeline=train_pipeline,
-            classes=class_names,
-            modality=input_modality,
-            test_mode=False,
-            with_box2d=True,
-            box_type_3d='LiDAR',
+            type=dataset_type, data_root=data_root,
+            pipeline=train_pipeline, classes=class_names,
+            modality=input_modality, test_mode=False,
+            with_box2d=True, box_type_3d='LiDAR',
             ann_file='/home/radardepth/data/nuscenes/nuscenes_infos_train_4d_interval3_max60_wradar.pkl',
-            load_interval=1,
-            sequential=True,
-            n_times=4,
-            train_adj_ids=[1, 3, 5],
-            speed_mode='abs_velo',
-            max_interval=10,
-            min_interval=0,
-            fix_direction=True,
-            prev_only=True,
-            test_adj='prev',
-            test_adj_ids=[1, 3, 5],
-            test_time_id=None,
+            load_interval=1, sequential=True, n_times=4,
+            train_adj_ids=[1, 3, 5], speed_mode='abs_velo',
+            max_interval=10, min_interval=0, fix_direction=True,
+            prev_only=True, test_adj='prev', test_adj_ids=[1, 3, 5], test_time_id=None,
         )
     ),
     val=dict(
-        type=dataset_type,
-        data_root=data_root,
-        pipeline=test_pipeline,
-        classes=class_names,
-        modality=input_modality,
-        test_mode=True,
-        with_box2d=True,
-        box_type_3d='LiDAR',
+        type=dataset_type, data_root=data_root,
+        pipeline=test_pipeline, classes=class_names,
+        modality=input_modality, test_mode=True,
+        with_box2d=True, box_type_3d='LiDAR',
         ann_file='/home/radardepth/data/nuscenes/nuscenes_infos_val_4d_interval3_max60_wradar.pkl',
-        load_interval=1,
-        sequential=True,
-        n_times=4,
-        train_adj_ids=[1, 3, 5],
-        speed_mode='abs_velo',
-        max_interval=10,
-        min_interval=0,
-        fix_direction=True,
-        test_adj='prev',
-        test_adj_ids=[1, 3, 5],
-        test_time_id=None,
+        load_interval=1, sequential=True, n_times=4,
+        train_adj_ids=[1, 3, 5], speed_mode='abs_velo',
+        max_interval=10, min_interval=0, fix_direction=True,
+        test_adj='prev', test_adj_ids=[1, 3, 5], test_time_id=None,
     ),
     test=dict(
-        type=dataset_type,
-        data_root=data_root,
-        pipeline=test_pipeline,
-        classes=class_names,
-        modality=input_modality,
-        test_mode=True,
-        with_box2d=True,
-        box_type_3d='LiDAR',
+        type=dataset_type, data_root=data_root,
+        pipeline=test_pipeline, classes=class_names,
+        modality=input_modality, test_mode=True,
+        with_box2d=True, box_type_3d='LiDAR',
         ann_file='/home/radardepth/data/nuscenes/nuscenes_infos_val_4d_interval3_max60_wradar.pkl',
-        load_interval=1,
-        sequential=True,
-        n_times=4,
-        train_adj_ids=[1, 3, 5],
-        speed_mode='abs_velo',
-        max_interval=10,
-        min_interval=0,
-        fix_direction=True,
-        test_adj='prev',
-        test_adj_ids=[1, 3, 5],
-        test_time_id=None,
+        load_interval=1, sequential=True, n_times=4,
+        train_adj_ids=[1, 3, 5], speed_mode='abs_velo',
+        max_interval=10, min_interval=0, fix_direction=True,
+        test_adj='prev', test_adj_ids=[1, 3, 5], test_time_id=None,
     )
 )
 
-optimizer = dict(
-    type='Adam',
-    lr=0.0004,
-    weight_decay=0.01,
-    paramwise_cfg=dict(
-        custom_keys={'backbone': dict(lr_mult=0.1, decay_mult=1.0)}))
+optimizer = dict(type='Adam', lr=0.0004, weight_decay=0.01,
+    paramwise_cfg=dict(custom_keys={'backbone': dict(lr_mult=0.1, decay_mult=1.0)}))
 optimizer_config = dict(grad_clip=dict(max_norm=35., norm_type=2))
-
-lr_config = dict(
-    policy='poly',
-    warmup='linear',
-    warmup_iters=1000,
-    warmup_ratio=1e-6,
-    power=1.0,
-    min_lr=0,
-    by_epoch=False
-)
-
+lr_config = dict(policy='poly', warmup='linear', warmup_iters=1000,
+                 warmup_ratio=1e-6, power=1.0, min_lr=0, by_epoch=False)
 total_epochs = 5
 checkpoint_config = dict(interval=1)
-log_config = dict(
-    interval=10,
-    hooks=[
-        dict(type='TextLoggerHook'),
-        dict(type='ProgressBarLoggerHook'),
-        dict(type='TensorboardLoggerHook'),
-    ])
+log_config = dict(interval=10, hooks=[
+    dict(type='TextLoggerHook'),
+    dict(type='ProgressBarLoggerHook'),
+    dict(type='TensorboardLoggerHook'),
+])
 evaluation = dict(interval=5)
 dist_params = dict(backend='nccl')
 find_unused_parameters = True
 log_level = 'INFO'
 
-# 加载预训练的FastBEV权重作为初始化
-# 融合模型从纯视觉的FastBEV权重开始，再finetune
 load_from = 'work_dir/latest.pth'
-# 后续将从融合模型导入参数开始训练
-# load_from = 'work_dir_fusion/latest.pth'
 resume_from = None
 workflow = [('train', 1)]
-
-# fp16设置
 fp16 = dict(loss_scale='dynamic')
