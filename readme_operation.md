@@ -21,6 +21,12 @@ python tools/test.py \
     configs/fastbev/exp/fusion/fastbev_m0_r18_radar_fusion.py \
     work_dir_fusion/latest.pth \
     --eval mAP 
+
+python tools/test.py \
+configs/fastbev/exp/fusion/fastbev_m0_r18_radar_fusion.py \
+work_dir_fusion/latest.pth \
+--eval mAP \
+--out work_dir_fusion/results_latest.pkl 
     
 # 基础评估，输出mAP、NDS等指标，保存文件
 python tools/test.py \
