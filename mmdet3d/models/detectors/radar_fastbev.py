@@ -252,7 +252,6 @@ class RadarFastBEV(FastBEV):
 
         return bev_feat.unsqueeze(0)  # (1, 2, H, W)
 
-    @auto_fp16(apply_to=('img', 'radar_points'))
     def extract_feat(self, img, img_metas, mode, radar_points=None):
         """提取融合特征
 
@@ -423,7 +422,8 @@ class RadarFastBEV(FastBEV):
 
         return x, None, features_2d
 
-    @auto_fp16(apply_to=('img', 'radar_points'))
+    # 由父类FastBEV在forward上统一处理fp16
+    # @auto_fp16(apply_to=('img', 'radar_points'))
     def forward(self, img, img_metas, return_loss=True, **kwargs):
         """Forward function"""
         if return_loss:
@@ -444,6 +444,18 @@ class RadarFastBEV(FastBEV):
 
         feature_bev, valids, features_2d = self.extract_feat(
             img, img_metas, "train", radar_points=radar_points)
+
+        # 调试：检查梯度流
+        if self.training and self._debug_iter == 0:
+            if isinstance(feature_bev, list):
+                print(f'[DEBUG] feature_bev is list, len={len(feature_bev)}')
+                for i, fb in enumerate(feature_bev):
+                    if isinstance(fb, torch.Tensor):
+                        print(f'  [{i}] shape={fb.shape}, requires_grad={fb.requires_grad}')
+                    else:
+                        print(f'  [{i}] type={type(fb)}')
+            else:
+                print(f'[DEBUG] feature_bev type={type(feature_bev)}, shape={feature_bev.shape}, requires_grad={feature_bev.requires_grad}')
 
         assert self.bbox_head is not None or self.seg_head is not None
 

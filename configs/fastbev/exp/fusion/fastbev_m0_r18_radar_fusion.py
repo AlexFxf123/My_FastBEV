@@ -234,8 +234,8 @@ dist_params = dict(backend='nccl')
 find_unused_parameters = True
 log_level = 'INFO'
 
-load_from = '/home/radardepth/桌面/My_FastBEV/pretrained_models/cascade_mask_rcnn_r18_fpn_coco-mstrain_3x_20e_nuim_bbox_mAP_0.5110_segm_mAP_0.4070.pth'
-# load_from = None
+# load_from = '/home/radardepth/桌面/My_FastBEV/pretrained_models/cascade_mask_rcnn_r18_fpn_coco-mstrain_3x_20e_nuim_bbox_mAP_0.5110_segm_mAP_0.4070.pth'
+load_from = None
 
 # ========== 可视化调试 ==========
 # enabled=True：每100帧保存cam+gt和bev图到 work_dir/vis_debug/
@@ -246,6 +246,6 @@ custom_hooks = [
 ]
 
 resume_from = None
-# resume_from = 'work_dir_fusion/latest.pth'
+resume_from = 'work_dir_fusion/latest.pth'
 workflow = [('train', 1)]
-fp16 = dict(loss_scale='dynamic')
+# fp16 = dict(loss_scale='dynamic')  # 暂时关闭fp16
