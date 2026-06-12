@@ -126,8 +126,25 @@ def add_radar_info():
             q_l2e = _quat_from_info(info['lidar2ego_rotation'], order=LIDAR_QUAT_ORDER)
             R_l2e = q_l2e.rotation_matrix.astype(np.float64)          # lidar->ego
             t_l2e = np.asarray(info['lidar2ego_translation'], dtype=np.float64)
+            T_lidar2ego = _rt_to_T(R_l2e, t_l2e)                      # lidar->ego (4x4)
 
-            T_lidar_from_ego = np.linalg.inv(_rt_to_T(R_l2e, t_l2e))  # ego->lidar
+            # 获取 LIDAR_TOP 的 ego_pose（用于 lidar global 对齐）
+            lidar_token = sample['data']['LIDAR_TOP']
+            sd_lidar = nusc.get('sample_data', lidar_token)
+            cs_lidar = nusc.get('calibrated_sensor', sd_lidar['calibrated_sensor_token'])
+            pose_lidar = nusc.get('ego_pose', sd_lidar['ego_pose_token'])
+
+            # lidar sensor -> lidar ego
+            R_lse = Quaternion(cs_lidar['rotation']).rotation_matrix.astype(np.float64)
+            t_lse = np.asarray(cs_lidar['translation'], dtype=np.float64)
+            # lidar ego -> global
+            R_leg = Quaternion(pose_lidar['rotation']).rotation_matrix.astype(np.float64)
+            t_leg = np.asarray(pose_lidar['translation'], dtype=np.float64)
+
+            # 构建 lidar 的 4x4：sensor -> ego -> global
+            T_lidar_s2e = _rt_to_T(R_lse, t_lse)
+            T_lidar_e2g = _rt_to_T(R_leg, t_leg)
+            T_lidar_s2g = T_lidar_e2g @ T_lidar_s2e  # lidar sensor -> global
 
             radars = {}
 
@@ -140,26 +157,28 @@ def add_radar_info():
                 cs = nusc.get('calibrated_sensor', sd['calibrated_sensor_token'])
                 pose = nusc.get('ego_pose', sd['ego_pose_token'])
 
-                # ---- 路径：存相对路径（FIX: 不要用 get_sample_data_path 的绝对路径） ----
+                # ---- 路径：存相对路径 ----
                 data_relpath = str(sd['filename'])
 
-                # ---- sensor->lidar 4x4 矩阵链（SAFER / 可读 / 不易写反） ----
+                # ---- 雷达 sensor -> radar ego -> radar global ----
                 R_s2e = Quaternion(cs['rotation']).rotation_matrix.astype(np.float64)
                 t_s2e = np.asarray(cs['translation'], dtype=np.float64)
-                T_ego_from_sensor = _rt_to_T(R_s2e, t_s2e)
+                T_radar_s2e = _rt_to_T(R_s2e, t_s2e)
 
                 R_e2g = Quaternion(pose['rotation']).rotation_matrix.astype(np.float64)
                 t_e2g = np.asarray(pose['translation'], dtype=np.float64)
-                T_global_from_ego = _rt_to_T(R_e2g, t_e2g)
+                T_radar_e2g = _rt_to_T(R_e2g, t_e2g)
 
-                # T_lidar_from_sensor = T_lidar_from_ego @ T_global_from_ego @ T_ego_from_sensor
-                T = T_lidar_from_ego @ (T_global_from_ego @ T_ego_from_sensor)
+                T_radar_s2g = T_radar_e2g @ T_radar_s2e  # radar sensor -> global
 
-                R_out = T[:3, :3].astype(np.float32)
-                t_out = T[:3, 3].astype(np.float32)
+                # ---- sensor -> lidar: 先都转到 global 再相减 ----
+                # T_sensor2lidar = inv(T_lidar_s2g) @ T_radar_s2g
+                T_sl = np.linalg.inv(T_lidar_s2g) @ T_radar_s2g
+
+                R_out = T_sl[:3, :3].astype(np.float32)
+                t_out = T_sl[:3, 3].astype(np.float32)
 
                 radars[ch] = {
-                    # 你 pipeline 里应该 Os.path.join(dataroot, data_path) 来加载
                     'data_path': data_relpath,
                     'sample_data_token': sd['token'],
                     'sensor2lidar_rotation': R_out.tolist(),

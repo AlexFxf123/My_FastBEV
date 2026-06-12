@@ -75,13 +75,13 @@ def project_lidar_to_image(xyz_lidar, cam_info):
     return uv, depth, mask
 
 
-def visualize(sample_idx=0, data_set='train'):
+def visualize(sample_idx=0, data_set='mini'):
     """可视化雷达点云"""
     dataroot = '/home/radardepth/data/nuscenes/'
     
     # 加载info
     info_path = os.path.join(
-        dataroot, f'nuscenes_infos_{data_set}_4d_interval3_max60_wradar.pkl')
+        dataroot, f'nuscenes_infos_val_4d_interval3_max60_wradar.pkl')
     with open(info_path, 'rb') as f:
         data = pickle.load(f)
     
@@ -100,9 +100,9 @@ def visualize(sample_idx=0, data_set='train'):
         for radar_name, radar_info in info['radars'].items():
             if 'data_path' not in radar_info:
                 continue
-            data_path = radar_info['data_path']
+            data_path = os.path.join(dataroot, radar_info['data_path'])
             if not os.path.exists(data_path):
-                print(f"  {radar_name}: 文件不存在")
+                print(f"  {radar_name}: 文件不存在 ({data_path})")
                 continue
             
             pc = RadarPointCloud.from_file(data_path)
@@ -113,10 +113,10 @@ def visualize(sample_idx=0, data_set='train'):
             
             print(f"  {radar_name}: {points.shape[1]} 个点")
             
-            # 转换到LIDAR坐标
+            # 转换到LIDAR坐标（外参单位是mm，需转为m）
             if 'sensor2lidar_rotation' in radar_info:
                 rot = np.array(radar_info['sensor2lidar_rotation']).reshape(3, 3)
-                trans = np.array(radar_info['sensor2lidar_translation']).reshape(3, 1)
+                trans = np.array(radar_info['sensor2lidar_translation']).reshape(3, 1) / 1000.0
                 xyz_lidar = rot @ points[:3, :] + trans
                 all_xyz_lidar.append(xyz_lidar)
                 all_rcs.append(points[5, :])
@@ -139,9 +139,10 @@ def visualize(sample_idx=0, data_set='train'):
             continue
         
         cam_info = info['cams'][cam]
-        img_path = cam_info['data_path']
+        img_path = os.path.join(dataroot, cam_info['data_path'])
         img = cv2.imread(img_path)
         if img is None:
+            print(f"    {cam}: 图片加载失败 ({img_path})")
             continue
         
         # 投影

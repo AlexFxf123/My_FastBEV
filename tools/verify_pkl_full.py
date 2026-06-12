@@ -43,8 +43,11 @@ print("PKL =", PKL)
 with open(PKL, "rb") as f:
     obj = pickle.load(f)
 infos = obj["infos"] if isinstance(obj, dict) and "infos" in obj else obj
-info  = infos[0]
+# 可以修改 SAMPLE_IDX 来查看不同样本
+SAMPLE_IDX = 3  # 0, 1, 2, 3, ... 想看哪个改这里
+info  = infos[SAMPLE_IDX]
 token = info.get("token", "?")
+print(f"样本索引: {SAMPLE_IDX}")
 print("token =", str(token)[:20])
 print("radars keys =", list(info.get("radars", {}).keys()))
 print("cams   keys =", list(info.get("cams", {}).keys()))
@@ -248,16 +251,16 @@ for cam_key, gr, gc in CAM_ORDER:
         c, s = np.cos(yaw), np.sin(yaw)
 
         # 8 corners in lidar frame
-        # nuScenes: box centered at (cx,cy,cz), l along x(forward), w along y(left), h along z(up)
+        # 修改：w 沿 x 方向（长），l 沿 y 方向（宽）
         dlocal = np.array([
-            [ l/2,  w/2, -h/2],
-            [ l/2, -w/2, -h/2],
-            [-l/2, -w/2, -h/2],
-            [-l/2,  w/2, -h/2],
-            [ l/2,  w/2,  h/2],
-            [ l/2, -w/2,  h/2],
-            [-l/2, -w/2,  h/2],
-            [-l/2,  w/2,  h/2],
+            [ w/2,  l/2, -h/2],
+            [ w/2, -l/2, -h/2],
+            [-w/2, -l/2, -h/2],
+            [-w/2,  l/2, -h/2],
+            [ w/2,  l/2,  h/2],
+            [ w/2, -l/2,  h/2],
+            [-w/2, -l/2,  h/2],
+            [-w/2,  l/2,  h/2],
         ], dtype=np.float64).T  # 3×8
 
         # rotate around z
@@ -269,14 +272,17 @@ for cam_key, gr, gc in CAM_ORDER:
         p_cam = RceT @ (p_ego - t_ce)  # 3×8
 
         Z = p_cam[2]
-        # 要求所有 8 个角点都在相机前方（不然后方物体穿到前方画面）
-        if (Z <= 0.25).any():
-            # 保守：跳过有角点在后方的 box（避免穿帮）
-            # 你也可以改成只画 z>0 的边
-            pass
+        # 如果框的中心在相机后方，跳过整个框
+        center_idx = 0  # 用第一个角点近似中心
+        if Z[center_idx] <= 0.25:
+            continue
 
         u = K[0,0] * p_cam[0] / Z + K[0,2]
         v = K[1,1] * p_cam[1] / Z + K[1,2]
+
+        # 检查框的8个点是否都在图像范围内，全在图像外则跳过
+        u_clip = np.clip(round(u[0]), 0, img.width-1)
+        v_clip = np.clip(round(v[0]), 0, img.height-1)
 
         # 12 edges of a cuboid
         edges = [(0,1),(1,2),(2,3),(3,0),
@@ -293,14 +299,13 @@ for cam_key, gr, gc in CAM_ORDER:
             draw.line([(x1,y1),(x2,y2)], fill="red", width=2)
 
         # 标签
-        if Z[0] > 0.3:
-            try:
-                lbl = str(gn[bi]).split(".")[-1][:6]
-            except Exception:
-                lbl = "?"
-            uu = int(np.clip(round(u[0]), 0, img.width-1))
-            vv = int(np.clip(round(v[0])-10, 0, img.height-1))
-            draw.text((uu, vv), lbl, fill="yellow")
+        try:
+            lbl = str(gn[bi]).split(".")[-1][:6]
+        except Exception:
+            lbl = "?"
+        uu = int(np.clip(round(u[0]), 0, img.width-1))
+        vv = int(np.clip(round(v[0])-10, 0, img.height-1))
+        draw.text((uu, vv), lbl, fill="yellow")
 
     # 相机名
     try:
@@ -390,7 +395,7 @@ gn = np.asarray(info["gt_names"])
 for i in range(gt.shape[0]):
     cx,cy,_,w,l,h,yaw = gt[i]
     c,s=np.cos(yaw),np.sin(yaw)
-    loc=np.array([[ l/2,w/2],[ l/2,-w/2],[-l/2,-w/2],[-l/2,w/2]],dtype=np.float64).T
+    loc=np.array([[ w/2,l/2],[ w/2,-l/2],[-w/2,-l/2],[-w/2,l/2]],dtype=np.float64).T
     pol=(np.array([[c,-s],[s,c]])@loc+[[cx],[cy]]).T
     ax.add_patch(Polygon(pol, closed=True, fill=False, edgecolor="lime", lw=1.4))
 
