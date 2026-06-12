@@ -460,8 +460,6 @@ class RadarFastBEV(FastBEV):
 
     def simple_test(self, img, img_metas, **kwargs):
         radar_points = kwargs.get('radar_points', None)
-        # 测试代码，正常工作可以关闭
-        print(f"[DEBUG] radar_points type={type(radar_points)}, len={len(radar_points) if isinstance(radar_points, (list, tuple)) else 'N/A'}")
         feature_bev, _, features_2d = self.extract_feat(
             img, img_metas, "test", radar_points=radar_points)
 

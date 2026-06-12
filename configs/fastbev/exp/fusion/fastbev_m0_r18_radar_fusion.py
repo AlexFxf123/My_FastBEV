@@ -169,6 +169,7 @@ test_pipeline = [
         dict(type='LoadImageFromFile', file_client_args=file_client_args)]),
     dict(type='LoadRadarPointsFromFile', use_dim=[0, 1, 2, 3, 4, 5], max_points=30000, data_root=data_root),
     dict(type='RandomAugImageMultiViewImage', data_config=data_config, is_train=False),
+    dict(type='KittiSetOrigin', point_cloud_range=point_cloud_range),
     dict(type='NormalizeMultiviewImage', **img_norm_cfg),
     dict(type='DefaultFormatBundle3D', class_names=class_names, with_label=False),
     dict(type='Collect3D', keys=['img', 'radar_points'])]
@@ -219,7 +220,7 @@ optimizer = dict(type='Adam', lr=0.0004, weight_decay=0.01,
 optimizer_config = dict(grad_clip=dict(max_norm=35., norm_type=2))
 lr_config = dict(policy='poly', warmup='linear', warmup_iters=1000,
                  warmup_ratio=1e-6, power=1.0, min_lr=0, by_epoch=False)
-total_epochs = 4  # 训练轮次
+total_epochs = 3  # 训练轮次
 checkpoint_config = dict(interval=1)
 log_config = dict(interval=100, hooks=[
     dict(type='TextLoggerHook'),
@@ -239,10 +240,10 @@ load_from = None
 # enabled=False: 关闭
 custom_hooks = [
     dict(type='VisualDebugHook', interval=100,
-         data_root=data_root, enabled=True),  # True=启用可视化, False=关闭
+         data_root=data_root, enabled=False),  # True=启用可视化, False=关闭
 ]
 
-resume_from = None
-# resume_from = 'work_dir_fusion/latest.pth'
+# resume_from = None
+resume_from = 'work_dir_fusion/latest.pth'
 workflow = [('train', 1)]
 fp16 = dict(loss_scale='dynamic')

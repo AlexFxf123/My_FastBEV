@@ -316,17 +316,14 @@ def main():
         kwargs = {} if args.eval_options is None else args.eval_options
 
         if args.format_only:
-            # ★ 强制 format 输出进 save-dir（不管 dataset.format_results 内部怎么拼）
-            fmt_root = osp.join(args.save_dir, 'format_submission', 'results')
-            _fmt_dir = osp.dirname(fmt_root)
-            os.makedirs(_fmt_dir, exist_ok=True)
+            # 输出到工程目录下的 test_results/
+            _out_dir = osp.join(osp.dirname(osp.abspath(__file__)), '..', 'test_results')
+            _fmt_root = osp.join(_out_dir, 'results')
+            os.makedirs(_out_dir, exist_ok=True)
 
-            # 覆盖 nuScenes format 实现认的名字
-            kwargs['jsonfile_prefix'] = fmt_root
-            kwargs['out_dir']        = _fmt_dir
-            kwargs['submission_dir'] = _fmt_dir
+            kwargs['jsonfile_prefix'] = _fmt_root
 
-            print(f'[SAVE-DIR] format_results → {_fmt_dir}')
+            print(f'[SAVE-DIR] format_results → {_out_dir}')
             dataset.format_results(outputs, **kwargs)
 
         if args.eval:
