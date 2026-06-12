@@ -327,6 +327,12 @@ def main():
             dataset.format_results(outputs, **kwargs)
 
         if args.eval:
+            # 保护：如果所有结果都没有预测框，则退出
+            total_boxes = sum(len(out.get('boxes_3d', [])) for out in outputs)
+            if total_boxes == 0:
+                print('\n⚠️  模型未预测出任何框，跳过评估')
+                return
+
             eval_kwargs = cfg.get('evaluation', {}).copy()
             for key in ['interval','tmpdir','start','gpu_collect','save_best','rule']:
                 eval_kwargs.pop(key, None)
