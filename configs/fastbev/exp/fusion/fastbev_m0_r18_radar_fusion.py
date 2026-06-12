@@ -155,11 +155,7 @@ train_pipeline = [
     dict(type='MultiViewPipeline', sequential=True, n_images=6, n_times=4, transforms=[
         dict(type='LoadImageFromFile', file_client_args=file_client_args)]),
     dict(type='LoadAnnotations3D', with_bbox=True, with_label=True, with_bev_seg=True),
-    dict(type='LoadRadarPointsFromFile', use_dim=[0, 1, 2, 3, 5, 6, 7], max_points=30000),
-    dict(type='RandomFlip3D', flip_2d=False, sync_2d=False,
-         flip_ratio_bev_horizontal=0.5, flip_ratio_bev_vertical=0.5, update_img2lidar=True),
-    dict(type='GlobalRotScaleTrans', rot_range=[-0.3925, 0.3925],
-         scale_ratio_range=[0.95, 1.05], translation_std=[0.05, 0.05, 0.05], update_img2lidar=True),
+    dict(type='LoadRadarPointsFromFile', use_dim=[0, 1, 2, 3, 4, 5], max_points=30000, data_root=data_root),
     dict(type='RandomAugImageMultiViewImage', data_config=data_config),
     dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
     dict(type='KittiSetOrigin', point_cloud_range=point_cloud_range),
@@ -171,9 +167,8 @@ train_pipeline = [
 test_pipeline = [
     dict(type='MultiViewPipeline', sequential=True, n_images=6, n_times=4, transforms=[
         dict(type='LoadImageFromFile', file_client_args=file_client_args)]),
-    dict(type='LoadRadarPointsFromFile', use_dim=[0, 1, 2, 3, 5, 6, 7], max_points=30000),
+    dict(type='LoadRadarPointsFromFile', use_dim=[0, 1, 2, 3, 4, 5], max_points=30000, data_root=data_root),
     dict(type='RandomAugImageMultiViewImage', data_config=data_config, is_train=False),
-    dict(type='KittiSetOrigin', point_cloud_range=point_cloud_range),
     dict(type='NormalizeMultiviewImage', **img_norm_cfg),
     dict(type='DefaultFormatBundle3D', class_names=class_names, with_label=False),
     dict(type='Collect3D', keys=['img', 'radar_points'])]
@@ -226,7 +221,7 @@ lr_config = dict(policy='poly', warmup='linear', warmup_iters=1000,
                  warmup_ratio=1e-6, power=1.0, min_lr=0, by_epoch=False)
 total_epochs = 1
 checkpoint_config = dict(interval=1)
-log_config = dict(interval=10, hooks=[
+log_config = dict(interval=100, hooks=[
     dict(type='TextLoggerHook'),
     dict(type='ProgressBarLoggerHook'),
     dict(type='TensorboardLoggerHook'),
