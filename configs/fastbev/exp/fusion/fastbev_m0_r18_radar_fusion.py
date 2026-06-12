@@ -219,8 +219,7 @@ optimizer = dict(type='Adam', lr=0.0004, weight_decay=0.01,
 optimizer_config = dict(grad_clip=dict(max_norm=35., norm_type=2))
 lr_config = dict(policy='poly', warmup='linear', warmup_iters=1000,
                  warmup_ratio=1e-6, power=1.0, min_lr=0, by_epoch=False)
-total_epochs = 1
-runner = dict(type='EpochBasedRunner', max_epochs=1)
+total_epochs = 4  # 训练轮次
 checkpoint_config = dict(interval=1)
 log_config = dict(interval=100, hooks=[
     dict(type='TextLoggerHook'),
@@ -236,14 +235,14 @@ log_level = 'INFO'
 load_from = None
 
 # ========== 可视化调试 ==========
-enabled = True        # 每100帧保存cam+gt和bev图到 work_dir/vis_debug/
+# enabled=True：每100帧保存cam+gt和bev图到 work_dir/vis_debug/
 # enabled=False: 关闭
 custom_hooks = [
     dict(type='VisualDebugHook', interval=100,
-         data_root=data_root, enabled=False),  # True=启用可视化, False=关闭
+         data_root=data_root, enabled=True),  # True=启用可视化, False=关闭
 ]
 
-
 resume_from = None
+# resume_from = 'work_dir_fusion/latest.pth'
 workflow = [('train', 1)]
 fp16 = dict(loss_scale='dynamic')
