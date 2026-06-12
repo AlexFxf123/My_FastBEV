@@ -55,6 +55,7 @@ model = dict(
                 [1., 1., 1.],
                 [0.4, 0.4, 1],
             ],
+            scales=[1],
             custom_values=[0, 0],
             rotations=[0, 1.57],
             reshape_out=True),
@@ -114,6 +115,7 @@ model = dict(
     radar_feat_height=1,
     fusion_channels=128,
     fusion_conv_layers=2,
+    debug_grad_interval=100,  # 每100iter打印一次梯度分布
 )
 
 point_cloud_range = [-50, -50, -5, 50, 50, 3]
@@ -220,7 +222,7 @@ optimizer = dict(type='Adam', lr=0.0004, weight_decay=0.01,
 optimizer_config = dict(grad_clip=dict(max_norm=35., norm_type=2))
 lr_config = dict(policy='poly', warmup='linear', warmup_iters=1000,
                  warmup_ratio=1e-6, power=1.0, min_lr=0, by_epoch=False)
-total_epochs = 20  # 训练轮次
+total_epochs = 3  # 训练轮次
 checkpoint_config = dict(interval=1)
 log_config = dict(interval=100, hooks=[
     dict(type='TextLoggerHook'),
@@ -232,8 +234,8 @@ dist_params = dict(backend='nccl')
 find_unused_parameters = True
 log_level = 'INFO'
 
-# load_from = 'work_dir/latest.pth'
-load_from = None
+load_from = '/home/radardepth/桌面/My_FastBEV/pretrained_models/cascade_mask_rcnn_r18_fpn_coco-mstrain_3x_20e_nuim_bbox_mAP_0.5110_segm_mAP_0.4070.pth'
+# load_from = None
 
 # ========== 可视化调试 ==========
 # enabled=True：每100帧保存cam+gt和bev图到 work_dir/vis_debug/
@@ -243,7 +245,7 @@ custom_hooks = [
          data_root=data_root, enabled=False),  # True=启用可视化, False=关闭
 ]
 
-# resume_from = None
-resume_from = 'work_dir_fusion/latest.pth'
+resume_from = None
+# resume_from = 'work_dir_fusion/latest.pth'
 workflow = [('train', 1)]
 fp16 = dict(loss_scale='dynamic')

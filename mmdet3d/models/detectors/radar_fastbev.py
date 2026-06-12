@@ -72,6 +72,8 @@ class RadarFastBEV(FastBEV):
         # 融合参数
         fusion_channels=None,        # 融合后的通道数，默认等于neck_3d的in_channels
         fusion_conv_layers=1,        # 融合卷积层数
+        # 调试参数
+        debug_grad_interval=0,       # 每隔多少iter打印梯度分布，0表示关闭
     ):
         # 调用父类初始化（FastBEV的__init__）
         super().__init__(
@@ -147,6 +149,8 @@ class RadarFastBEV(FastBEV):
             fusion_in_channels = fusion_channels
 
         self.fusion_in_channels = fusion_in_channels
+        self.debug_grad_interval = debug_grad_interval
+        self._debug_iter = 0
         print(f"[RadarFastBEV] Fusion input channels: {fusion_in_channels}")
 
     def extract_radar_feat(self, radar_points, img_metas):
@@ -448,6 +452,38 @@ class RadarFastBEV(FastBEV):
             x = self.bbox_head(feature_bev)
             loss_det = self.bbox_head.loss(*x, gt_bboxes_3d, gt_labels_3d, img_metas)
             losses.update(loss_det)
+
+        # ====== 按间隔打印梯度分布 ======
+        if self.debug_grad_interval > 0 and self.training and torch.is_grad_enabled():
+            self._debug_iter += 1
+            if self._debug_iter % self.debug_grad_interval == 0:
+                vis_params = []
+                radar_params = []
+                fusion_params = []
+                for name, p in self.named_parameters():
+                    if p.grad is not None:
+                        grad_norm = p.grad.norm().item()
+                        p_norm = p.norm().item()
+                        if 'backbone' in name or (('neck' in name or 'neck_fuse' in name or 'neck_3d' in name) and 'radar' not in name):
+                            vis_params.append((name, grad_norm, p_norm))
+                        elif 'radar' in name or 'radar_to_channels' in name:
+                            radar_params.append((name, grad_norm, p_norm))
+                        elif 'vis_proj' in name or 'radar_proj' in name or 'fusion_conv' in name:
+                            fusion_params.append((name, grad_norm, p_norm))
+                
+                def print_group(group_name, params):
+                    if params:
+                        norms = [p[1] for p in params]
+                        w_norms = [p[2] for p in params]
+                        print(f'[GRAD {group_name}] cnt={len(params)} grad_mean={sum(norms)/len(norms):.2f} grad_max={max(norms):.2f} w_mean={sum(w_norms)/len(w_norms):.2f} w_max={max(w_norms):.2f}')
+                
+                print_group('VIS', vis_params)
+                print_group('RADAR', radar_params)
+                print_group('FUSION', fusion_params)
+                total_grad = sum(p.grad.norm().item() for p in self.parameters() if p.grad is not None)
+                total_param = sum(p.norm().item() for p in self.parameters() if p.grad is not None)
+                print(f'[GRAD TOTAL] grad={total_grad:.2f} param={total_param:.2f}')
+        # ====== 结束梯度打印 ======
 
         if self.seg_head is not None:
             assert len(gt_bev_seg) == 1
