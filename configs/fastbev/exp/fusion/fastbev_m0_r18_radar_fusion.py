@@ -236,7 +236,8 @@ dist_params = dict(backend='nccl')
 find_unused_parameters = True
 log_level = 'INFO'
 
-load_from = 'work_dir/latest.pth'
+# load_from = 'work_dir/latest.pth'
+load_from = None
 resume_from = None
 workflow = [('train', 1)]
 fp16 = dict(loss_scale='dynamic')
