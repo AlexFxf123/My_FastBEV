@@ -168,3 +168,176 @@ class CollectRadarPoints(object):
 
     def __repr__(self):
         return f'{self.__class__.__name__}()'
+
+
+import pickle
+from PIL import Image, ImageDraw, ImageFont
+
+
+def _qR(w,x,y,z):
+    return np.array([
+        [1-2*(y*y+z*z), 2*(x*y-w*z),   2*(x*z+w*y)],
+        [2*(x*y+w*z),   1-2*(x*x+z*z), 2*(y*z-w*x)],
+        [2*(x*z-w*y),   2*(y*z+w*x),   1-2*(x*x+y*y)]])
+
+def _read_radar_pcd_simple(filepath):
+    if not os.path.isfile(filepath):
+        return None
+    with open(filepath, 'rb') as f:
+        data = f.read()
+    for tag in (b'DATA binary\r\n', b'DATA binary\n'):
+        i = data.find(tag)
+        if i != -1:
+            pos = i + len(b'DATA binary')
+            while pos < len(data) and data[pos] in (0x0A, 0x0D, 32):
+                pos += 1
+            data = data[pos:]
+            break
+    nb = len(data)
+    if nb % 43 != 0:
+        data = data[: (nb // 43) * 43]
+    if len(data) == 0:
+        return None
+    n = len(data) // 43
+    pts = np.zeros((n, 6), dtype=np.float32)
+    for i in range(n):
+        b = data[i*43:(i+1)*43]
+        pts[i,0] = np.frombuffer(b, np.float32, 1, 0)[0]
+        pts[i,1] = np.frombuffer(b, np.float32, 1, 4)[0]
+        pts[i,2] = np.frombuffer(b, np.float32, 1, 8)[0]
+        pts[i,3] = np.frombuffer(b, np.float32, 1, 27)[0]
+        pts[i,4] = np.frombuffer(b, np.float32, 1, 31)[0]
+        pts[i,5] = np.frombuffer(b, np.float32, 1, 15)[0]
+    return pts
+
+
+def save_visual_debug(info, data_root, out_dir, tag=''):
+    """
+    保存一组可视化结果（6相机+GT投影，BEV+雷达点云+GT框）
+    与 verify_pipeline_data.py 中逻辑完全相同
+    """
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Polygon
+
+    os.makedirs(out_dir, exist_ok=True)
+
+    R_le = _qR(*info['lidar2ego_rotation'])
+    t_le = np.array(info['lidar2ego_translation'], dtype=np.float64).reshape(3,1)
+
+    gt_boxes = np.asarray(info['gt_boxes'], dtype=np.float64)
+    gt_names = np.asarray(info['gt_names'])
+
+    # ---------- GT 8 角点 ----------
+    box_corners_lidar = []
+    for bi in range(gt_boxes.shape[0]):
+        cx,cy,cz,w,l,h,yaw = gt_boxes[bi]
+        c,s = np.cos(yaw), np.sin(yaw)
+        dlocal = np.array([
+            [ w/2,  l/2, -h/2], [ w/2, -l/2, -h/2],
+            [-w/2, -l/2, -h/2], [-w/2,  l/2, -h/2],
+            [ w/2,  l/2,  h/2], [ w/2, -l/2,  h/2],
+            [-w/2, -l/2,  h/2], [-w/2,  l/2,  h/2]], dtype=np.float64).T
+        Rz = np.array([[c,-s,0],[s,c,0],[0,0,1]], dtype=np.float64)
+        p_l = Rz @ dlocal + np.array([[cx],[cy],[cz]])
+        box_corners_lidar.append(p_l)
+
+    # ---------- 图1: 6相机 ----------
+    CAM_ORDER = [
+        ('CAM_FRONT_LEFT', 0, 0), ('CAM_FRONT', 0, 1), ('CAM_FRONT_RIGHT', 0, 2),
+        ('CAM_BACK_LEFT',  1, 0), ('CAM_BACK',   1, 1), ('CAM_BACK_RIGHT',  1, 2),
+    ]
+    cell_imgs = {}
+    for cam_key, gr, gc in CAM_ORDER:
+        cam = info.get('cams', {}).get(cam_key)
+        if not cam:
+            continue
+        img_path = os.path.join(data_root, cam['data_path'])
+        if not os.path.isfile(img_path):
+            continue
+        img = Image.open(img_path).convert('RGB')
+        draw = ImageDraw.Draw(img)
+
+        R_ce = _qR(*cam['sensor2ego_rotation'])
+        t_ce = np.array(cam['sensor2ego_translation'], dtype=np.float64).reshape(3,1)
+        K = np.array(cam['cam_intrinsic'], dtype=np.float64)
+        R_lidar2cam = R_ce.T @ R_le
+        t_lidar2cam = R_ce.T @ (t_le - t_ce)
+
+        for bi, corners_l in enumerate(box_corners_lidar):
+            pts_cam = (R_lidar2cam @ corners_l + t_lidar2cam).T
+            z = pts_cam[:, 2]
+            valid = z > 0.25
+            u = K[0,0] * pts_cam[:,0] / z + K[0,2]
+            v = K[1,1] * pts_cam[:,1] / z + K[1,2]
+            edges = [(0,1),(1,2),(2,3),(3,0),(4,5),(5,6),(6,7),(7,4),(0,4),(1,5),(2,6),(3,7)]
+            for a,b in edges:
+                if valid[a] and valid[b]:
+                    x1 = int(np.clip(round(u[a]), 0, img.width-1))
+                    y1 = int(np.clip(round(v[a]), 0, img.height-1))
+                    x2 = int(np.clip(round(u[b]), 0, img.width-1))
+                    y2 = int(np.clip(round(v[b]), 0, img.height-1))
+                    draw.line([(x1,y1),(x2,y2)], fill='red', width=2)
+            if valid[0]:
+                try: lbl = str(gt_names[bi]).split('.')[-1][:6]
+                except: lbl = '?'
+                uu = int(np.clip(round(u[0]), 0, img.width-1))
+                vv = int(np.clip(round(v[0])-10, 0, img.height-1))
+                draw.text((uu, vv), lbl, fill='yellow')
+        try:
+            fnt = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 16)
+        except:
+            fnt = ImageFont.load_default()
+        draw.text((6,6), cam_key.replace('CAM_',''), fill=(0,255,0), font=fnt)
+        cell_imgs[(gr, gc)] = img
+
+    if cell_imgs:
+        Ws = [im.width for im in cell_imgs.values()]
+        Hs = [im.height for im in cell_imgs.values()]
+        CW, CH = max(Ws), max(Hs)
+        canvas = Image.new('RGB', (CW*3, CH*2))
+        for (r,c), im in cell_imgs.items():
+            if im.size != (CW, CH):
+                im = im.resize((CW, CH), Image.BILINEAR)
+            canvas.paste(im, (c*CW, r*CH))
+        p1 = os.path.join(out_dir, f'cam_gt{tag}.png')
+        canvas.save(p1)
+
+    # ---------- 图2: BEV ----------
+    fig, ax = plt.subplots(figsize=(12,12))
+    ax.set_aspect('equal')
+    ax.grid(True, ls='--', alpha=0.3)
+    ax.set_xlabel('X (m)'); ax.set_ylabel('Y (m)')
+    ax.set_xlim(-55, 55); ax.set_ylim(-55, 55)
+
+    RCHS = ['RADAR_FRONT','RADAR_FRONT_LEFT','RADAR_FRONT_RIGHT','RADAR_BACK_LEFT','RADAR_BACK_RIGHT']
+    COLORS = ['#e74c3c','#e67e22','#2ecc71','#3498db','#9b59b6']
+
+    for ch, col in zip(RCHS, COLORS):
+        r = info.get('radars', {}).get(ch)
+        if not r:
+            continue
+        fpath = os.path.join(data_root, r['data_path'])
+        pts6 = _read_radar_pcd_simple(fpath)
+        if pts6 is None or pts6.shape[0] == 0:
+            continue
+        Rsl = np.asarray(r['sensor2lidar_rotation'], np.float32)
+        tsl = np.asarray(r['sensor2lidar_translation'], np.float32).reshape(1,3)
+        xyz = pts6[:, :3] @ Rsl.T + tsl
+        ax.scatter(xyz[:,0], xyz[:,1], s=2, alpha=0.6, c=col, label=ch.replace('RADAR_',''))
+
+    for i in range(gt_boxes.shape[0]):
+        cx,cy,_,w,l,h,yaw = gt_boxes[i]
+        c,s = np.cos(yaw), np.sin(yaw)
+        loc = np.array([[ w/2, l/2],[ w/2,-l/2],[-w/2,-l/2],[-w/2, l/2]], dtype=np.float64).T
+        pol = (np.array([[c,-s],[s,c]]) @ loc + [[cx],[cy]]).T
+        ax.add_patch(Polygon(pol, closed=True, fill=False, edgecolor='lime', lw=1.5))
+        try: lbl = str(gt_names[i]).split('.')[-1][:6]
+        except: lbl = '?'
+        ax.text(cx, cy, lbl, fontsize=6, color='lime', ha='center', va='center')
+    ax.legend(fontsize=7, markerscale=5)
+    ax.set_title(f'BEV{tag}: radar + GT')
+    p2 = os.path.join(out_dir, f'bev{tag}.png')
+    fig.savefig(p2, dpi=150, bbox_inches='tight')
+    plt.close()

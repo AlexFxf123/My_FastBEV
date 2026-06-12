@@ -18,7 +18,8 @@ from .transforms_3d import (BackgroundPointsFilter, GlobalAlignment,
 from .multi_view import (MultiViewPipeline, RandomShiftOrigin, KittiSetOrigin,
                          KittiRandomFlip, SunRgbdSetOrigin, SunRgbdTotalLoadImageFromFile,
                          SunRgbdRandomFlip)
-from .radar_loading import LoadRadarPointsFromFile, CollectRadarPoints
+from .radar_loading import LoadRadarPointsFromFile, CollectRadarPoints, save_visual_debug
+from .visual_debug_hook import VisualDebugHook
 
 __all__ = [
     'ObjectSample', 'RandomFlip3D', 'ObjectNoise', 'GlobalRotScaleTrans',
