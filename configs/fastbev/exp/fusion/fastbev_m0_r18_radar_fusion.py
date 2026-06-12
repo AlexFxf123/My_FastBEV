@@ -224,7 +224,7 @@ optimizer = dict(type='Adam', lr=0.0004, weight_decay=0.01,
 optimizer_config = dict(grad_clip=dict(max_norm=35., norm_type=2))
 lr_config = dict(policy='poly', warmup='linear', warmup_iters=1000,
                  warmup_ratio=1e-6, power=1.0, min_lr=0, by_epoch=False)
-total_epochs = 5
+total_epochs = 1
 checkpoint_config = dict(interval=1)
 log_config = dict(interval=10, hooks=[
     dict(type='TextLoggerHook'),
