@@ -302,7 +302,7 @@ total_epochs = 5    # 修改为5次，仅用作测试
 checkpoint_config = dict(interval=1)
 # 在配置文件中
 log_config = dict(
-    interval=10,
+    interval=100,
     hooks=[
         dict(type='TextLoggerHook'),            # 保留文件日志
         dict(type='ProgressBarLoggerHook'),     # 新增进度条
@@ -315,9 +315,10 @@ log_level = 'INFO'
 
 # 第一次从预训练模型开始
 load_from = 'pretrained_models/cascade_mask_rcnn_r18_fpn_coco-mstrain_3x_20e_nuim_bbox_mAP_0.5110_segm_mAP_0.4070.pth'
+# load_from = None
 # 后续从之前训练好模型开始
-# load_from = 'work_dir/latest.pth'
 resume_from = None
+# resume_from = 'work_dir/latest.pth'
 workflow = [('train', 1)]
 
 # fp16 settings, the loss scale is specifically tuned to avoid Nan
