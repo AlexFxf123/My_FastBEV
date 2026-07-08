@@ -1,0 +1,191 @@
+FastBEV(
+  (backbone): ResNet(
+    (conv1): Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+    (bn1): SyncBatchNorm(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (relu): ReLU(inplace=True)
+    (maxpool): MaxPool2d(kernel_size=3, stride=2, padding=1, dilation=1, ceil_mode=False)
+    (layer1): ResLayer(
+      (0): BasicBlock(
+        (conv1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): SyncBatchNorm(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): SyncBatchNorm(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (relu): ReLU(inplace=True)
+      )
+      (1): BasicBlock(
+        (conv1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): SyncBatchNorm(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): SyncBatchNorm(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (relu): ReLU(inplace=True)
+      )
+    )
+    (layer2): ResLayer(
+      (0): BasicBlock(
+        (conv1): Conv2d(64, 128, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+        (bn1): SyncBatchNorm(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): SyncBatchNorm(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (relu): ReLU(inplace=True)
+        (downsample): Sequential(
+          (0): Conv2d(64, 128, kernel_size=(1, 1), stride=(2, 2), bias=False)
+          (1): SyncBatchNorm(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        )
+      )
+      (1): BasicBlock(
+        (conv1): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): SyncBatchNorm(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): SyncBatchNorm(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (relu): ReLU(inplace=True)
+      )
+    )
+    (layer3): ResLayer(
+      (0): BasicBlock(
+        (conv1): Conv2d(128, 256, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+        (bn1): SyncBatchNorm(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): SyncBatchNorm(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (relu): ReLU(inplace=True)
+        (downsample): Sequential(
+          (0): Conv2d(128, 256, kernel_size=(1, 1), stride=(2, 2), bias=False)
+          (1): SyncBatchNorm(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        )
+      )
+      (1): BasicBlock(
+        (conv1): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): SyncBatchNorm(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): SyncBatchNorm(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (relu): ReLU(inplace=True)
+      )
+    )
+    (layer4): ResLayer(
+      (0): BasicBlock(
+        (conv1): Conv2d(256, 512, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+        (bn1): SyncBatchNorm(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (conv2): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): SyncBatchNorm(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (relu): ReLU(inplace=True)
+        (downsample): Sequential(
+          (0): Conv2d(256, 512, kernel_size=(1, 1), stride=(2, 2), bias=False)
+          (1): SyncBatchNorm(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        )
+      )
+      (1): BasicBlock(
+        (conv1): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): SyncBatchNorm(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (conv2): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): SyncBatchNorm(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (relu): ReLU(inplace=True)
+      )
+    )
+  )
+  init_cfg={'type': 'Pretrained', 'checkpoint': 'torchvision://resnet18'}
+  (neck): FPN(
+    (lateral_convs): ModuleList(
+      (0): ConvModule(
+        (conv): Conv2d(64, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (bn): SyncBatchNorm(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      )
+      (1): ConvModule(
+        (conv): Conv2d(128, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (bn): SyncBatchNorm(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      )
+      (2): ConvModule(
+        (conv): Conv2d(256, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (bn): SyncBatchNorm(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      )
+      (3): ConvModule(
+        (conv): Conv2d(512, 64, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (bn): SyncBatchNorm(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      )
+    )
+    (fpn_convs): ModuleList(
+      (0): ConvModule(
+        (conv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn): SyncBatchNorm(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      )
+      (1): ConvModule(
+        (conv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn): SyncBatchNorm(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      )
+      (2): ConvModule(
+        (conv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn): SyncBatchNorm(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      )
+      (3): ConvModule(
+        (conv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn): SyncBatchNorm(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      )
+    )
+  )
+  init_cfg={'type': 'Xavier', 'layer': 'Conv2d', 'distribution': 'uniform'}
+  (neck_3d): M2BevNeck(
+    (fuse): Conv2d(1024, 256, kernel_size=(1, 1), stride=(1, 1))
+    (model): Sequential(
+      (0): ResModule2D(
+        (conv0): ConvModule(
+          (conv): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (bn): SyncBatchNorm(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (activate): ReLU(inplace=True)
+        )
+        (conv1): ConvModule(
+          (conv): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (bn): SyncBatchNorm(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        )
+        (activation): ReLU(inplace=True)
+      )
+      (1): ConvModule(
+        (conv): Conv2d(256, 192, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+        (bn): SyncBatchNorm(192, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (activate): ReLU(inplace=True)
+      )
+      (2): ResModule2D(
+        (conv0): ConvModule(
+          (conv): Conv2d(192, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (bn): SyncBatchNorm(192, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (activate): ReLU(inplace=True)
+        )
+        (conv1): ConvModule(
+          (conv): Conv2d(192, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (bn): SyncBatchNorm(192, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        )
+        (activation): ReLU(inplace=True)
+      )
+      (3): ConvModule(
+        (conv): Conv2d(192, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn): SyncBatchNorm(192, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (activate): ReLU(inplace=True)
+      )
+      (4): ResModule2D(
+        (conv0): ConvModule(
+          (conv): Conv2d(192, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (bn): SyncBatchNorm(192, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          (activate): ReLU(inplace=True)
+        )
+        (conv1): ConvModule(
+          (conv): Conv2d(192, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+          (bn): SyncBatchNorm(192, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        )
+        (activation): ReLU(inplace=True)
+      )
+      (5): ConvModule(
+        (conv): Conv2d(192, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn): SyncBatchNorm(192, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (activate): ReLU(inplace=True)
+      )
+    )
+  )
+  (neck_fuse_0): Conv2d(256, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  (bbox_head): FreeAnchor3DHead(
+    (loss_cls): FocalLoss()
+    (loss_bbox): SmoothL1Loss()
+    (loss_dir): CrossEntropyLoss()
+    (convs): Identity()
+    (conv_cls): Conv2d(192, 80, kernel_size=(1, 1), stride=(1, 1))
+    (conv_reg): Conv2d(192, 72, kernel_size=(1, 1), stride=(1, 1))
+    (conv_dir_cls): Conv2d(192, 16, kernel_size=(1, 1), stride=(1, 1))
+  )
+  init_cfg={'type': 'Normal', 'layer': 'Conv2d', 'std': 0.01, 'override': {'type': 'Normal', 'name': 'conv_cls', 'std': 0.01, 'bias_prob': 0.01}}
+)
