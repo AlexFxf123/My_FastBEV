@@ -113,7 +113,7 @@ class_names = [
     'motorcycle', 'pedestrian', 'traffic_cone', 'barrier'
 ]
 dataset_type = 'NuScenesMultiView_Map_Dataset2'
-data_root = './data/nuscenes/'
+data_root = '/home/radardepth/data/nuscenes/'
 # Input modality for nuScenes dataset, this is consistent with the submission
 # format which requires the information in input_modality.
 input_modality = dict(

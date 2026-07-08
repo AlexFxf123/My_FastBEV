@@ -18,6 +18,8 @@ from .transforms_3d import (BackgroundPointsFilter, GlobalAlignment,
 from .multi_view import (MultiViewPipeline, RandomShiftOrigin, KittiSetOrigin,
                          KittiRandomFlip, SunRgbdSetOrigin, SunRgbdTotalLoadImageFromFile,
                          SunRgbdRandomFlip)
+from .radar_loading import LoadRadarPointsFromFile, CollectRadarPoints, save_visual_debug
+from .visual_debug_hook import VisualDebugHook
 
 __all__ = [
     'ObjectSample', 'RandomFlip3D', 'ObjectNoise', 'GlobalRotScaleTrans',
@@ -29,5 +31,6 @@ __all__ = [
     'LoadPointsFromMultiSweeps', 'BackgroundPointsFilter',
     'VoxelBasedPointSampler', 'GlobalAlignment', 'IndoorPatchPointSample',
     'LoadImageFromFileMono3D', 'ObjectNameFilter', 'RandomDropPointsColor',
-    'RandomJitterPoints', 'LoadMultiViewImageFromFilesV2'
+    'RandomJitterPoints', 'LoadMultiViewImageFromFilesV2',
+    'LoadRadarPointsFromFile', 'CollectRadarPoints'
 ]

@@ -26,6 +26,8 @@ from mmdet3d.models import build_model
 from mmdet3d.utils import collect_env, get_root_logger
 from mmdet.apis import set_random_seed
 from mmseg import __version__ as mmseg_version
+from tqdm import tqdm
+from mmcv.runner import HOOKS, LoggerHook
 from IPython import embed
 import ipdb
 
@@ -98,6 +100,11 @@ def parse_args():
         '-d', '--debug',
         action='store_true',
         help='automatically scale lr with the number of gpus')
+    parser.add_argument(
+        '--log-interval',
+        type=int,
+        default=100,
+        help='print loss and other intermediate results every N iterations')
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
@@ -265,6 +272,83 @@ def main():
             if hasattr(datasets[0], 'PALETTE') else None)
     # add an attribute for visualization convenience
     model.CLASSES = datasets[0].CLASSES
+
+    # ===== 注入进度条 Hook =====
+    @HOOKS.register_module(force=True)
+    class ProgressBarLoggerHook(LoggerHook):
+        """Custom LoggerHook that shows a tqdm progress bar."""
+
+        def __init__(self, interval=10, ignore_last=True, reset_flag=False, by_epoch=True):
+            super().__init__(interval, ignore_last, reset_flag, by_epoch)
+            self.pbar = None
+            self.log_interval = 20  # default, overridden by args
+
+        def before_run(self, runner):
+            super().before_run(runner)
+            self.max_epochs = runner.max_epochs
+
+        def before_epoch(self, runner):
+            if self.pbar is not None:
+                self.pbar.close()
+            self.iters = len(runner.data_loader)
+            self._iter_cnt = 0
+            self.pbar = tqdm(
+                total=self.iters,
+                desc=f'Epoch [{runner.epoch + 1}/{self.max_epochs}]',
+                position=0,
+                leave=True,
+                bar_format='{desc} {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
+            )
+
+        def log(self, runner):
+            if self.pbar is None:
+                return
+            cur_interval = self.interval
+            self._iter_cnt += cur_interval
+            # 保证进度条不超过总长度
+            remaining = self.iters - self.pbar.n
+            step = min(cur_interval, remaining)
+            if step > 0:
+                self.pbar.update(step)
+            tags = self.get_loggable_tags(runner)
+            if tags:
+                metrics = {}
+                formatted_losses = ''
+                for k, v in tags.items():
+                    if isinstance(v, float):
+                        metrics[k] = f'{v:.4f}'
+                        formatted_losses += f'|{k}: {v:.4f} '
+                    else:
+                        metrics[k] = str(v)
+                self.pbar.set_postfix(metrics)
+                # 每 log_interval 个迭代打印详细 loss
+                if self._iter_cnt % self.log_interval == 0 or self._iter_cnt == cur_interval:
+                    iter_info = f'Iter [{self._iter_cnt}/{self.iters}]'
+                    runner.logger.info(f'{iter_info} {formatted_losses}')
+
+        def after_epoch(self, runner):
+            if self.pbar is not None:
+                self.pbar.update(self.iters - self.pbar.n)
+                self.pbar.close()
+                self.pbar = None
+
+        def after_run(self, runner):
+            if self.pbar is not None:
+                self.pbar.close()
+                self.pbar = None
+
+    # 替换 TextLoggerHook 为 ProgressBarLoggerHook，保留其他 hook
+    log_interval = args.log_interval
+    cfg.log_config.hooks = [
+        h for h in cfg.log_config.hooks if h['type'] != 'TextLoggerHook'
+    ]
+    cfg.log_config.hooks.append(
+        dict(type='ProgressBarLoggerHook', interval=cfg.log_config.get('interval', 10))
+    )
+    # 将 log_interval 写入 runner 配置
+    logger.info(f'Log interval set to {log_interval} iterations')
+    # ===== 结束注入 =====
+
     train_model(
         model,
         datasets,

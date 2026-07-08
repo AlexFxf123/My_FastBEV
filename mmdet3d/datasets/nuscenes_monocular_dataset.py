@@ -39,8 +39,12 @@ class NuScenesMultiViewDataset(MultiViewMixin, NuScenesDataset):
                 intrinsic=np.eye(4, dtype=np.float32),
                 lidar2img_aug=data_info['lidar2img_aug'],
                 lidar2img_extra=data_info['lidar2img_extra']
-            )
+            ),
         )
+        # 添加radars字段 (for radar fusion)
+        info = self.data_infos[index]
+        if 'radars' in info:
+            new_info['radars'] = info['radars']
         if 'ann_info' in data_info:
             gt_bboxes_3d = data_info['ann_info']['gt_bboxes_3d']
             gt_labels_3d = data_info['ann_info']['gt_labels_3d'].copy()

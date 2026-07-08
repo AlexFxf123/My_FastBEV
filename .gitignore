@@ -154,3 +154,8 @@ figs
 envs/
 tools/quant
 **/quant
+
+
+work_dir/
+work_dir_fusion/
+onnx_models/

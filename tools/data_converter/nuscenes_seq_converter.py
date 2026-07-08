@@ -6,109 +6,153 @@ import numpy as np
 from pyquaternion import Quaternion
 import ipdb
 
-
 def add_adj_info():
+    import os
+
     interval = 3
     max_adj = 60
     sample_num = None
-    for set in ['test', 'val', 'train', ]:
-        if set in ['val', 'train']:
+
+    base_dir = '/home/radardepth/data/nuscenes'
+
+    # ============================================================
+    # ★ 只 init 一次 NuScenes，不再每个 set 重新 Loading 全量表
+    # ============================================================
+    nuscenes_version = 'v1.0-trainval'
+    dataroot = base_dir
+    print('[INIT] NuScenes once, version=', nuscenes_version)
+    nuscenes = NuScenes(nuscenes_version, dataroot, verbose=True)
+    print('[INIT] Done. scenes:', len(nuscenes.scene))
+
+    # 预建 token→id（跨 set 也用同一份 nuscenes 对象）
+    # 先收集所有 pkl 里出现过的 token，但我们还不知道有哪些 pkl
+    # → 所以改为：先决定要跑哪些 set，再统一用同一个 nuscenes 对象处理
+
+    target_sets = ['val', 'train']
+    # target_sets = ['train']   # 如果还炸，就一次只跑一个
+
+    results = {}
+
+    for set_ in target_sets:
+        pkl_path = os.path.join(base_dir, f'nuscenes_infos_{set_}.pkl')
+        if not os.path.exists(pkl_path):
+            print(f'[SKIP] pkl not found: {pkl_path}')
             continue
-        dataset = pickle.load(open('./data/nuscenes/nuscenes_infos_%s.pkl' % set, 'rb'))
-        if set in ['train', 'val']:
-            nuscenes_version = 'v1.0-trainval'
-        else:
-            nuscenes_version = 'v1.0-test'
-        dataroot = './data/nuscenes/'
-        nuscenes = NuScenes(nuscenes_version, dataroot)
-        map_token_to_id = dict()
-        for id in range(len(dataset['infos'])):
-            map_token_to_id[dataset['infos'][id]['token']] = id
-            if sample_num is not None and id > sample_num:
+
+        print(f'\n===== [{set_}] loading pkl: {pkl_path}')
+        with open(pkl_path, 'rb') as f:
+            dataset = pickle.load(f)
+
+        # ---- token → id ----
+        map_token_to_id = {}
+        total = len(dataset['infos'])
+        for _id in range(total):
+            map_token_to_id[dataset['infos'][_id]['token']] = _id
+            if sample_num is not None and _id >= sample_num:
                 break
-        for id in range(len(dataset['infos'])):
-            if id % 10 == 0:
-                print('%d/%d' % (id, len(dataset['infos'])))
-            if sample_num is not None and id > sample_num:
+
+        # ---- 主处理（你原来的逻辑，几乎原样搬） ----
+        for _id in range(total):
+            if _id % 10 == 0:
+                print(f'[{set_}] {_id}/{total}')
+            if sample_num is not None and _id >= sample_num:
                 break
-            info = dataset['infos'][id]
+
+            info = dataset['infos'][_id]
             sample = nuscenes.get('sample', info['token'])
-            for adj in ['next', 'prev']:
+
+            # === next / prev sweeps ===
+            for adj in ('next', 'prev'):
                 sweeps = []
-                adj_list = dict()
+                adj_list = {}
                 for cam in ['CAM_FRONT', 'CAM_FRONT_RIGHT', 'CAM_FRONT_LEFT',
                             'CAM_BACK', 'CAM_BACK_RIGHT', 'CAM_BACK_LEFT']:
                     adj_list[cam] = []
-
-                    sample_data = nuscenes.get('sample_data', sample['data'][cam])
-                    adj_list[cam] = []
+                    sd = nuscenes.get('sample_data', sample['data'][cam])
                     count = 0
                     while count < max_adj:
-                        if sample_data[adj] == '':
+                        if sd[adj] == '':
                             break
-                        sd_adj = nuscenes.get('sample_data', sample_data[adj])
-                        sample_data = sd_adj
-                        adj_list[cam].append(dict(data_path='./data/nuscenes/' + sd_adj['filename'],
-                                                  timestamp=sd_adj['timestamp'],
-                                                  ego_pose_token=sd_adj['ego_pose_token']))
+                        sd = nuscenes.get('sample_data', sd[adj])
+                        adj_list[cam].append(dict(
+                            data_path=os.path.join(base_dir, sd['filename']),
+                            timestamp=sd['timestamp'],
+                            ego_pose_token=sd['ego_pose_token'],
+                        ))
                         count += 1
-                for count in range(interval - 1, min(max_adj, len(adj_list['CAM_FRONT'])), interval):
-                    timestamp_front = adj_list['CAM_FRONT'][count]['timestamp']
-                    # get ego pose
-                    pose_record = nuscenes.get('ego_pose', adj_list['CAM_FRONT'][count]['ego_pose_token'])
 
-                    # get cam infos
-                    cam_infos = dict(CAM_FRONT=dict(data_path=adj_list['CAM_FRONT'][count]['data_path']))
-                    for cam in ['CAM_FRONT', 'CAM_FRONT_RIGHT', 'CAM_FRONT_LEFT',
-                                'CAM_BACK', 'CAM_BACK_RIGHT', 'CAM_BACK_LEFT']:
-                        timestamp_curr_list = np.array([t['timestamp'] for t in adj_list[cam]], dtype=np.long)
-                        diff = np.abs(timestamp_curr_list - timestamp_front)
-                        selected_idx = np.argmin(diff)
-                        cam_infos[cam] = dict(data_path=adj_list[cam][int(selected_idx)]['data_path'])
-                        # print('%02d-%s'%(selected_idx, cam))
-                    sweeps.append(dict(timestamp=timestamp_front, cams=cam_infos,
-                                       ego2global_translation=pose_record['translation'],
-                                       ego2global_rotation=pose_record['rotation']))
-                dataset['infos'][id][adj] = sweeps if len(sweeps) > 0 else None
+                front_len = len(adj_list['CAM_FRONT'])
+                for cnt in range(interval - 1, min(max_adj, front_len), interval):
+                    ts_front = adj_list['CAM_FRONT'][cnt]['timestamp']
+                    pose_rec = nuscenes.get(
+                        'ego_pose', adj_list['CAM_FRONT'][cnt]['ego_pose_token']
+                    )
+                    cam_infos = {
+                        'CAM_FRONT': dict(
+                            data_path=adj_list['CAM_FRONT'][cnt]['data_path']
+                        )
+                    }
+                    for cam in ['CAM_FRONT_RIGHT', 'CAM_FRONT_LEFT',
+                                 'CAM_BACK', 'CAM_BACK_RIGHT', 'CAM_BACK_LEFT']:
+                        ts_arr = np.array(
+                            [t['timestamp'] for t in adj_list[cam]], dtype=np.long
+                        )
+                        sel = int(np.argmin(np.abs(ts_arr - ts_front)))
+                        cam_infos[cam] = dict(
+                            data_path=adj_list[cam][sel]['data_path']
+                        )
+                    sweeps.append(dict(
+                        timestamp=ts_front,
+                        cams=cam_infos,
+                        ego2global_translation=pose_rec['translation'],
+                        ego2global_rotation=pose_rec['rotation'],
+                    ))
 
-            # get ego speed and transfrom the targets velocity from global frame into ego-relative mode
-            previous_id = id
-            if not sample['prev'] == '':
-                sample_tmp = nuscenes.get('sample', sample['prev'])
-                previous_id = map_token_to_id[sample_tmp['token']]
-            next_id = id
-            if not sample['next'] == '':
-                sample_tmp = nuscenes.get('sample', sample['next'])
-                next_id = map_token_to_id[sample_tmp['token']]
-            time_pre = 1e-6 * dataset['infos'][previous_id]['timestamp']
-            time_next = 1e-6 * dataset['infos'][next_id]['timestamp']
-            time_diff = time_next - time_pre
-            posi_pre = np.array(dataset['infos'][previous_id]['ego2global_translation'], dtype=np.float32)
-            posi_next = np.array(dataset['infos'][next_id]['ego2global_translation'], dtype=np.float32)
-            velocity_global = (posi_next - posi_pre) / time_diff
+                info[adj] = sweeps if sweeps else None
 
-            l2e_r = info['lidar2ego_rotation']
-            l2e_t = info['lidar2ego_translation']
-            e2g_r = info['ego2global_rotation']
-            e2g_t = info['ego2global_translation']
-            l2e_r_mat = Quaternion(l2e_r).rotation_matrix
-            e2g_r_mat = Quaternion(e2g_r).rotation_matrix
+            # === ego velocity ===
+            prev_id = _id
+            if sample['prev'] != '':
+                s_prev = nuscenes.get('sample', sample['prev'])
+                prev_id = map_token_to_id[s_prev['token']]
 
-            velocity_global = np.array([*velocity_global[:2], 0.0])
-            velocity_lidar = velocity_global @ np.linalg.inv(e2g_r_mat).T @ np.linalg.inv(
-                l2e_r_mat).T
-            velocity_lidar = velocity_lidar[:2]
+            next_id = _id
+            if sample['next'] != '':
+                s_next = nuscenes.get('sample', sample['next'])
+                next_id = map_token_to_id[s_next['token']]
 
-            dataset['infos'][id]['velo'] = velocity_lidar
-            if set in ['train', 'val']:
-                dataset['infos'][id]['gt_velocity'] = dataset['infos'][id]['gt_velocity'] - velocity_lidar.reshape(1, 2)
+            t_prev = 1e-6 * dataset['infos'][prev_id]['timestamp']
+            t_next = 1e-6 * dataset['infos'][next_id]['timestamp']
+            dt = t_next - t_prev
 
-        filename = './data/nuscenes/nuscenes_infos_%s_4d_interval%d_max%d.pkl' % (set, interval, max_adj)
+            p_prev = np.array(dataset['infos'][prev_id]['ego2global_translation'], dtype=np.float32)
+            p_next = np.array(dataset['infos'][next_id]['ego2global_translation'], dtype=np.float32)
+            vel_global = (p_next - p_prev) / dt
+
+            e2g_r_mat = Quaternion(info['ego2global_rotation']).rotation_matrix
+            l2e_r_mat = Quaternion(info['lidar2ego_rotation']).rotation_matrix
+            vel_global_3 = np.array([vel_global[0], vel_global[1], 0.0], dtype=np.float32)
+            vel_lidar = vel_global_3 @ np.linalg.inv(e2g_r_mat).T @ np.linalg.inv(l2e_r_mat).T
+            vel_lidar = vel_lidar[:2]
+
+            info['velo'] = vel_lidar
+            if set_ in ('train', 'val'):
+                if 'gt_velocity' in info:
+                    info['gt_velocity'] = info['gt_velocity'] - vel_lidar.reshape(1, 2)
+
+        # ---- dump ----
+        out_name = f'nuscenes_infos_{set_}_4d_interval{interval}_max{max_adj}.pkl'
+        out_path = os.path.join(base_dir, out_name)
         if sample_num is not None:
-            filename = filename.replace('.pkl', f'_sample{sample_num}.pkl')
-        with open(filename, 'wb') as fid:
-            pickle.dump(dataset, fid)
+            stem, ext = os.path.splitext(out_name)
+            out_path = os.path.join(base_dir, f'{stem}_sample{sample_num}{ext}')
 
+        print(f'[{set_}] writing {out_path}')
+        with open(out_path, 'wb') as fid:
+            pickle.dump(dataset, fid)
+        print(f'[{set_}] DONE.')
+
+    print('\n====== ALL DONE ====')
 
 if __name__ == '__main__':
     add_adj_info()
